@@ -68,7 +68,30 @@ hold off
 %7. For each trib get the curvature of the trunk where they meet (take
 %bottom node, snap to trunk stream, get curvature?)
 %8. For each trib get ksn of the bottom part of the stream
-%9. Compare the curvature of the trunk with the ksn of the tr
+%9. Compare the curvature of the trunk with the ksn of the trib for left
+%side and right side tribs
 
-%5. for each trib 
+%% clip to just bedrock stream and make a new stream network sS
+Strunky=trunk(Strunk);
+i_outlet=[1862390, 5595200];
+[i_outx, iout_y]=snap2stream(Strunky, i_outlet(1), i_outlet(2));
+i_out_onstream=[i_outx, iout_y];
+db=drainagebasins(FD, i_outx, iout_y);
+sDEM=clip(DEM, db);
+figure
+imageschs(sDEM)
+
+sFD=FLOWobj(sDEM, 'preprocess', 'carve');
+sS=STREAMobj(sFD, 'minarea',1000);
+figure
+imageschs(sDEM)
+hold on
+plot(sS)
+hold off
+%% make a trunk 
+strunky=trunk(sS);
+sDEMnan=sDEM;
+[lat,long,ixc2,elev,dist, area] = STREAMobj2XY(Strunky,ixc,sDEM,Ss.distance, A, x, y);
+
+sDEMnan
 
