@@ -1,0 +1,10 @@
+data="F:/nz_data/airborn_lidar/kawhatau.tif"
+DEM=GRIDobj(data);
+	
+DEM = inpaintnans(DEM);
+FD=FLOWobj(DEM, 'preprocess', 'carve');
+S=STREAMobj(FD, 'minarea',500);
+Q=flowacc(
+
+figure 
+imageschs(DEM)
