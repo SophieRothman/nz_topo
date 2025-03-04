@@ -80,39 +80,57 @@ i_outlet=[1862390, 5595200];
 i_out_onstream=[i_outx, iout_y];
 db=drainagebasins(FD, i_outx, iout_y);
 sDEM=clip(DEM, db);
-figure
-imageschs(sDEM)
+% figure
+% imageschs(sDEM)
 
 sFD=FLOWobj(sDEM, 'preprocess', 'carve');
 sS=STREAMobj(sFD, 'minarea',1000);
 y = smooth(sS,sS.y,'k',200,'nstribs',true); %smooth the planform by a 10 m window
 x = smooth(sS,sS.x,'k',200,'nstribs',true);
+curv = curvature(sS,x,y);
 
 ty = smooth(strunky,strunky.y,'k',200,'nstribs',true); %smooth the planform by a 10 m window
 tx = smooth(strunky,strunky.x,'k',200,'nstribs',true);
-figure
-imageschs(sDEM)
-hold on
-plot(sS)
-hold off
-%% make a trunk 
+tcurv = curvature(strunky,tx,ty);
+
+% figure
+% imageschs(sDEM)
+% hold on
+% plot(sS)
+% hold off
+%% smooth, get curvature, do the same for trunk 
+
+y = smooth(sS,sS.y,'k',200,'nstribs',true); %smooth the planform by a 10 m window
+x = smooth(sS,sS.x,'k',200,'nstribs',true);
+curv = curvature(sS,x,y);
+
 strunky=trunk(sS);
+
+ty = smooth(strunky,strunky.y,'k',200,'nstribs',true); %smooth the planform by a 10 m window
+tx = smooth(strunky,strunky.x,'k',200,'nstribs',true);
+tcurv = curvature(strunky,tx,ty);
+
+
 
 
 sA=flowacc(sFD);
 ixc = getnal(sS);
 ixc(sS.ix) = sS.ixc;
-[lat,long,ixc2,elev,dist, area, smoothx, smoothy] = STREAMobj2XY(sS,ixc,sDEM,sS.distance, sA, x, y);
+sk = ksn(sS,sDEM,sA,.45, 100);
+stk = ksn(strunky,sDEM,sA,.45, 100);
+
+[lat,long,ixc2,elev,dist, area, smoothx, smoothy, ks, cv] = STREAMobj2XY(sS,ixc,sDEM,sS.distance, sA, x, y, sk, curv);
 ixc = getnal(strunky);
 ixc(strunky.ix) = strunky.ixc;
-[tlat,tlong,tixc2,telev,tdist, tarea, tsmoothx, tsmoothy] = STREAMobj2XY(strunky,ixc,sDEM,strunky.distance, sA, tx, ty);
+[tlat,tlong,tixc2,telev,tdist, tarea, tsmoothx, tsmoothy, tks, tcv] = STREAMobj2XY(strunky,ixc,sDEM,strunky.distance, sA, tx, ty, stk, tcurv);
 
 ntribs_tot=length(lat(isnan(lat))) %check number of tribs
 inan_tot=find(isnan(lat));
+
+%% to get the nan index of every trib connected to the main stem
 inan=[];
 snapx_trib=[];
 snapy_trib=[];
-%% to get the nan index of every trib connected to the main stem
 count=0;
 for i =2:ntribs_tot
     xout=lat(inan_tot(i)-1);
@@ -146,25 +164,142 @@ end
 %first get the angle of both the trib and the mainstem for each junction
 a_trib=NaN(length(inan), 1);
 a_ms=NaN(length(inan), 1);
+ypos_trib=NaN(length(inan), 1);
+ypos_ms=NaN(length(inan), 1);
+xpos_trib=NaN(length(inan), 1);
+xpos_ms=NaN(length(inan), 1);
 
 for i=1:length(inan)
     if ~isnan(i_ms(i))
-        if sum(isnan(smoothx((inan(i)-11):(inan(i)-1))))==0
-            poly1fit=polyfit(smoothx((inan(i)-11):(inan(i)-1)), smoothy((inan(i)-11):(inan(i)-1)), 1);
+        %for the trib first whats the angle
+        if sum(isnan(smoothx((inan(i)-1):-1:(inan(i)-11))))==0
+            poly1fit=polyfit(smoothx((inan(i)-1):-1:(inan(i)-11), 1), smoothy((inan(i)-1):-1:(inan(i)-11)), 1);
         end
-        if sum(isnan(smoothx((inan(i)-11):(inan(i)-1))))~=0  % do a less robust polyfit for those very short tribs
-            poly1fit=polyfit(smoothx((inan(i)-4):(inan(i)-1)), smoothy((inan(i)-4):(inan(i)-1)), 1);
+        if sum(isnan(smoothx((inan(i)-1):-1:(inan(i)-11))))~=0  % do a less robust polyfit for those very short tribs
+            poly1fit=polyfit(smoothx((inan(i)-1):-1:(inan(i)-3)), smoothy((inan(i)-1):-1:(inan(i)-3)), 1);
         end
         angle=atan(poly1fit(1));
         a_trib(i)=rad2deg(angle);
+        %is it moving in a y pos or neg direction
+        if sum(isnan(smoothx((inan(i)-1):-1:(inan(i)-11))))==0
+            tribdify=smoothy(inan(i)-1)-smoothy(inan(i)-11);
+            tribdifx=smoothx(inan(i)-1)-smoothx(inan(i)-11);
+
+        end
+        if sum(isnan(smoothx((inan(i)-1):-1:(inan(i)-11))))~=0  % do a less robust polyfit for those very short tribs
+            tribdify=smoothy(inan(i)-1)-smoothy(inan(i)-3); 
+            tribdifx=smoothx(inan(i)-1)-smoothx(inan(i)-3);        
+
+        end
+        if tribdify>0
+           ypos_trib(i)=1; 
+        end
+        if tribdify<0
+           ypos_trib(i)=0; 
+        end
+        if tribdifx>0
+           xpos_trib(i)=1; 
+        end
+        if tribdifx<0
+           xpos_trib(i)=0; 
+        end
+
+        %for the ms first whats the angle
         if i~=1 & i~=518
-            poly1fit2=polyfit(tsmoothx((i_ms(i)-5):(i_ms(i)+5)), tsmoothy((i_ms(i)-5):(i_ms(i)+5)), 1);
+            poly1fit2=polyfit(tsmoothx((i_ms(i)+5):-1:(i_ms(i)-5)), tsmoothy((i_ms(i)+5):-1:(i_ms(i)-5)), 1);
         end
         if i==1 | i==518
-            poly1fit2=polyfit(tsmoothx((i_ms(i)-5):(i_ms(i))), tsmoothy((i_ms(i)-5):(i_ms(i))), 1);
+            poly1fit2=polyfit(tsmoothx((i_ms(i)):-1:(i_ms(i)-5)), tsmoothy((i_ms(i)):-1:(i_ms(i)-5)), 1);
         end
-            angle2=atan(poly1fit2(1));
+        angle2=atan(poly1fit2(1));
         a_ms(i)=rad2deg(angle2);
+        
+        %is it moving in a y pos or neg direction
+        if i~=1 & i~=518
+            msdify=tsmoothy(i_ms(i)+5)-tsmoothy(i_ms(i)-5);
+            msdifx=tsmoothx(i_ms(i)+5)-tsmoothx(i_ms(i)-5);
+        end
+        
+        if i==1 | i==518
+            msdify=tsmoothy(i_ms(i))-tsmoothy(i_ms(i)-5);
+            msdifx=tsmoothx(i_ms(i))-tsmoothx(i_ms(i)-5);        
 
+        end
+        if msdify>0
+           ypos_ms(i)=1;
+        end
+        if msdify<0
+           ypos_ms(i)=0;
+        end     
+        if msdifx>0
+           xpos_ms(i)=1;
+        end
+        if msdifx<0
+           xpos_ms(i)=0;
+        end  
     end
 end
+a_trib(ypos_trib==0 & xpos_trib>0)= a_trib(ypos_trib==0 & xpos_trib>0)+180;
+a_trib(ypos_trib>0 & xpos_trib>0)= a_trib(ypos_trib>0 & xpos_trib>0)-180;
+%a_trib(ypos_trib>0 & xpos_trib==0)= a_trib(ypos_trib>0 & xpos_trib==0)+360;
+
+a_ms(ypos_ms==0 & xpos_ms>0)= a_ms(ypos_ms==0 & xpos_ms>0)+180;
+a_ms(ypos_ms>0 & xpos_ms>0)= a_ms(ypos_ms>0 & xpos_ms>0)-180;
+%a_ms(ypos_ms>0 & xpos_ms==0)= a_ms(ypos_ms>0 & xpos_ms==0)+360;
+
+a_tribtoms=a_trib-a_ms;
+%a_tribtoms(ypos_ms<0)=a_tribtoms(ypos_ms<0)*-1;
+%a_tribtoms(ypos_trib<0)=a_tribtoms(ypos_trib<0)*-1;
+a_tribtoms(a_tribtoms<180)=a_tribtoms(a_tribtoms<180)+360; %THIS IS IT
+a_tribtoms(a_tribtoms>180)=a_tribtoms(a_tribtoms>180)-360;  %THIS TOO
+%a_trib(ypos_trib<0)=a_trib(ypos_trib<0)*-1;
+%%
+
+figure
+%imageschs(sDEM)
+hold on
+plot(smoothx, smoothy, 'k')
+hold on
+scatter(snapx_trib, snapy_trib, 60, a_tribtoms, 'filled')
+%scatter(snapx_trib, snapy_trib, 20, a_trib, 'filled')
+%scatter(snapx_trib, snapy_trib, 20, a_tribtoms, 'filled')
+
+caxis([-180, 180])
+colormap(ttscm('vik'))
+h = colorbar;
+h.Label.String = 'Angle (degrees)';
+%% Get ksn at the bottom of the trib and drainage area 
+ksn_tribbot=NaN(length(inan), 1);
+da_trib=NaN(length(inan), 1);
+curve_ms=NaN(length(inan), 1);
+dist_tribbot=NaN(length(inan), 1);
+%there's also a_tribtoms
+
+for i=1:length(inan)
+    if ~isnan(i_ms(i)) & i~=518
+        ksn_tribbot(i)=mean(ks(inan(i)-20):ks(inan(i)-1));
+        if isnan(mean(ks(inan(i)-20):ks(inan(i)-1)))
+            ksn_tribbot(i)=mean(ks(inan(i)-5):ks(inan(i)-1));
+        end
+        da_trib(i)=area(inan(i)-1);
+        curve_ms(i)=mean(tcurv((i_ms(i)-2):(i_ms(i)+2)));
+        dist_tribbot(i)=tdist(i_ms(i)-1);
+    end
+end
+%tomorrow must check if this actually separates tribs
+%%
+figure
+plot(curve_ms(a_tribtoms>0 & dist_tribbot<1.7e4), ksn_tribbot(a_tribtoms>0& dist_tribbot<1.7e4), 'o')
+
+figure
+plot(curve_ms(a_tribtoms>0 ), a_tribtoms(a_tribtoms>0), 'ro')
+hold on
+plot(curve_ms(a_tribtoms<0 ), a_tribtoms(a_tribtoms<0), 'ko')
+xlabel('curvature')
+ylabel('trib angle')
+
+
+
+
+figure
+plot(dist_tribbot, ksn_tribbot, 'o')
