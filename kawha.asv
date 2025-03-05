@@ -18,6 +18,7 @@ c = chitransform(Strunk,A,'mn',0.55);
 figure
 imageschs(DEM,[],'colormap',[1 1 1],'colorbar',false,'ticklabel','nice');
 hold on
+figure
 plotc(Strunk,c)
 colormap(jet)
 colorbar
@@ -85,13 +86,13 @@ sDEM=clip(DEM, db);
 
 sFD=FLOWobj(sDEM, 'preprocess', 'carve');
 sS=STREAMobj(sFD, 'minarea',1000);
-y = smooth(sS,sS.y,'k',200,'nstribs',true); %smooth the planform by a 10 m window
-x = smooth(sS,sS.x,'k',200,'nstribs',true);
-curv = curvature(sS,x,y);
-
-ty = smooth(strunky,strunky.y,'k',200,'nstribs',true); %smooth the planform by a 10 m window
-tx = smooth(strunky,strunky.x,'k',200,'nstribs',true);
-tcurv = curvature(strunky,tx,ty);
+% y = smooth(sS,sS.y,'k',50,'nstribs',true); %smooth the planform by a 10 m window
+% x = smooth(sS,sS.x,'k',50,'nstribs',true);
+% curv = curvature(sS,x,y);
+% 
+% ty = smooth(strunky,strunky.y,'k',200,'nstribs',true); %smooth the planform by a 10 m window
+% tx = smooth(strunky,strunky.x,'k',200,'nstribs',true);
+% tcurv = curvature(strunky,tx,ty);
 
 % figure
 % imageschs(sDEM)
@@ -100,14 +101,14 @@ tcurv = curvature(strunky,tx,ty);
 % hold off
 %% smooth, get curvature, do the same for trunk 
 
-y = smooth(sS,sS.y,'k',200,'nstribs',true); %smooth the planform by a 10 m window
-x = smooth(sS,sS.x,'k',200,'nstribs',true);
+y = smooth(sS,sS.y,'k',500,'nstribs',true); %smooth the planform by a 10 m window
+x = smooth(sS,sS.x,'k',500,'nstribs',true);
 curv = curvature(sS,x,y);
 
 strunky=trunk(sS);
 
-ty = smooth(strunky,strunky.y,'k',200,'nstribs',true); %smooth the planform by a 10 m window
-tx = smooth(strunky,strunky.x,'k',200,'nstribs',true);
+ty = smooth(strunky,strunky.y,'k',500,'nstribs',true); %smooth the planform by a 10 m window
+tx = smooth(strunky,strunky.x,'k',500,'nstribs',true);
 tcurv = curvature(strunky,tx,ty);
 
 
@@ -116,8 +117,8 @@ tcurv = curvature(strunky,tx,ty);
 sA=flowacc(sFD);
 ixc = getnal(sS);
 ixc(sS.ix) = sS.ixc;
-sk = ksn(sS,sDEM,sA,.45, 100);
-stk = ksn(strunky,sDEM,sA,.45, 100);
+sk = ksn(sS,sDEM,sA,.45, 10);
+stk = ksn(strunky,sDEM,sA,.45, 10);
 
 [lat,long,ixc2,elev,dist, area, smoothx, smoothy, ks, cv] = STREAMobj2XY(sS,ixc,sDEM,sS.distance, sA, x, y, sk, curv);
 ixc = getnal(strunky);
@@ -277,16 +278,224 @@ dist_tribbot=NaN(length(inan), 1);
 
 for i=1:length(inan)
     if ~isnan(i_ms(i)) & i~=518
-        ksn_tribbot(i)=mean(ks(inan(i)-20):ks(inan(i)-1));
-        if isnan(mean(ks(inan(i)-20):ks(inan(i)-1)))
-            ksn_tribbot(i)=mean(ks(inan(i)-5):ks(inan(i)-1));
+        ksn_tribbot(i)=mean(ks(inan(i)-30:inan(i)-2));
+        if isnan(mean(ks(inan(i)-30 : inan(i)-2)))
+            ksn_tribbot(i)=mean(ks(inan(i)-15 : inan(i)-2));
+        end
+        if isnan(mean(ks(inan(i)-15 : inan(i)-2)))
+            ksn_tribbot(i)=mean(ks(inan(i)-5 : inan(i)-2));
         end
         da_trib(i)=area(inan(i)-1);
-        curve_ms(i)=mean(tcurv((i_ms(i)-1):(i_ms(i)+1)));
+        curve_ms(i)=tcv(i_ms(i)-2);%mean(tcv((i_ms(i)-2):(i_ms(i)+2)));
         dist_tribbot(i)=tdist(i_ms(i)-1);
     end
 end
 %tomorrow must check if this actually separates tribs
+%% binning by curv value
+xxp=curve_ms(a_tribtoms>0 );
+yyp=ksn_tribbot(a_tribtoms>0);
+xxn=curve_ms(a_tribtoms<0 );
+yyn=ksn_tribbot(a_tribtoms<0);
+binnum=15;
+curvbin=linspace(-.08, .08, binnum+1);
+%curvebin=[-.15, -.04, -.025, -.015,-.005, 0, .005, .015, .025, .04, .15 ];
+curvbin=[ -0.0800    -0.0480   -0.035   -0.022   -0.0160   -0.0053    0.0053    0.0160    0.0267    0.0373    0.0480       0.0800];
+binnum=length(curvbin)-1;
+negtbink=NaN(binnum, 1);
+postbink=NaN(binnum, 1);
+negtbinc=NaN(binnum, 1);
+postbinc=NaN(binnum, 1);
+
+
+
+dap=da_trib(a_tribtoms>0);
+dan=da_trib(a_tribtoms<0);
+angp=a_tribtoms(a_tribtoms>0);
+angn=a_tribtoms(a_tribtoms<0);
+negtbinda=NaN(binnum, 1);
+postbinda=NaN(binnum, 1);
+negtbinang=NaN(binnum, 1);
+postbinang=NaN(binnum, 1);
+
+for i=1:binnum
+    binn=(xxn>curvbin(i) & xxn<curvbin(i+1));
+    binp=(xxp>curvbin(i) & xxp<curvbin(i+1));
+
+    negtbink(i)=mean(yyn(binn), 'omitnan');
+    negtbinc(i)=mean(xxn(binn), 'omitnan');
+    
+    postbink(i)=mean(yyp(binp), 'omitnan');
+    postbinc(i)=mean(xxp(binp), 'omitnan');
+
+    negtbinda(i)=mean(dan(binn), 'omitnan');
+    postbinda(i)=mean(dap(binp), 'omitnan');
+    negtbinang(i)=mean(abs(angn(binn)), 'omitnan');
+    postbinang(i)=mean(abs(angp(binp)), 'omitnan');
+end
+
+
+%% curvature of ms vs  ksn of trib
+figure
+plot(curve_ms(a_tribtoms>0 & dist_tribbot<1.7e4), ksn_tribbot(a_tribtoms>0& dist_tribbot<1.7e4), 'o')
+
+xx=curve_ms(a_tribtoms>0 );
+yy=ksn_tribbot(a_tribtoms>0);
+postrib=fit(postbinc(~isnan(postbink)), postbink(~isnan(postbink)), 'poly1')
+figure
+tiledlayout(2, 1)
+nexttile
+plot(curve_ms(a_tribtoms>0 ), ksn_tribbot(a_tribtoms>0), 'o', 'MarkerEdgeColor', [.5, .5, .5])
+hold on
+plot(postbinc, postbink, 'ks', 'MarkerFaceColor', 'r' )
+plot(postrib)
+xlabel('curvature')
+ylabel('ksn')
+title('positive tribs river right')
+xlim([-.1, .1])
+
+xx2=curve_ms(a_tribtoms<0 );
+yy2=ksn_tribbot(a_tribtoms<0);
+negtrib=fit(negtbinc(~isnan(negtbink)), negtbink(~isnan(negtbink)), 'poly1')
+nexttile
+plot(curve_ms(a_tribtoms<0 ), ksn_tribbot(a_tribtoms<0), 'o', 'MarkerEdgeColor', [.5, .5, .5])
+hold on
+plot(negtbinc, negtbink, 'ks', 'MarkerFaceColor', 'r' )
+plot(negtrib)
+xlabel('curvature')
+ylabel('ksn')
+title('negative tribs river left')
+xlim([-.1, .1])
+%% same plot but da
+xx=curve_ms(a_tribtoms>0 );
+yy=ksn_tribbot(a_tribtoms>0);
+postrib=fit(postbinc(~isnan(postbinc)), postbinda(~isnan(postbinc)), 'poly1')
+figure
+tiledlayout(2, 1)
+nexttile
+plot(curve_ms(a_tribtoms>0 ), da_trib(a_tribtoms>0), 'o', 'MarkerEdgeColor', [.5, .5, .5])
+hold on
+plot(postbinc, postbinda, 'ks', 'MarkerFaceColor', 'r' )
+plot(postrib)
+xlabel('curvature')
+ylabel('DA')
+title('positive tribs river right')
+xlim([-.1, .1])
+
+%xx2=curve_ms(a_tribtoms<0 );
+%yy2=ksn_tribbot(a_tribtoms<0);
+negtrib=fit(negtbinc(~isnan(negtbinc)), negtbinda(~isnan(negtbinc)), 'poly1')
+nexttile
+plot(curve_ms(a_tribtoms<0 ), da_trib(a_tribtoms<0), 'o', 'MarkerEdgeColor', [.5, .5, .5])
+hold on
+plot(negtbinc, negtbinda, 'ks', 'MarkerFaceColor', 'r' )
+plot(negtrib)
+xlabel('curvature')
+ylabel('DA')
+title('negative tribs river left')
+xlim([-.1, .1])
+%% same plot but trib angle
+absang=abs(a_tribtoms);
+absang(absang>90)=absang(absang>90)-90;
+xx=abs(absang(a_tribtoms>0));
+yy=curve_ms(a_tribtoms>0 );
+postrib=fit(xx(~isnan(yy)), yy(~isnan(yy)),  'poly1')
+figure
+tiledlayout(2, 1)
+nexttile
+plot(abs(absang(a_tribtoms>0)), curve_ms(a_tribtoms>0 ), 'o', 'MarkerEdgeColor', [.5, .5, .5])
+hold on
+%plot(postbinang, postbinc, 'ks', 'MarkerFaceColor', 'r' )
+plot(postrib)
+ylabel('curvature')
+xlabel('Trib angle')
+title('positive tribs river right')
+ylim([-.1, .1])
+
+xx=abs(a_tribtoms(a_tribtoms<0));
+yy=curve_ms(a_tribtoms<0 );
+negtrib=fit(xx(~isnan(yy)), yy(~isnan(yy)),  'poly1')
+nexttile
+plot(abs(absang(a_tribtoms<0)), curve_ms(a_tribtoms<0 ), 'o', 'MarkerEdgeColor', [.5, .5, .5])
+hold on
+%plot(negtbinang,negtbinc,  'ks', 'MarkerFaceColor', 'r' )
+plot(negtrib)
+ylabel('curvature')
+xlabel('Trib angle')
+title('negative tribs river left')
+ylim([-.1, .1])
+
+%% trib angle ksn
+
+xx=(a_tribtoms(a_tribtoms>0));
+yy=ksn_tribbot(a_tribtoms>0 );
+postrib=fit(xx(~isnan(yy)), yy(~isnan(yy)),  'poly1')
+figure
+tiledlayout(2, 1)
+nexttile
+plot((a_tribtoms(a_tribtoms>0)), ksn_tribbot(a_tribtoms>0 ), 'o', 'MarkerEdgeColor', [.5, .5, .5])
+hold on
+%plot(postbinang, postbinc, 'ks', 'MarkerFaceColor', 'r' )
+plot(postrib)
+ylabel('curvature')
+xlabel('Trib angle')
+title('positive tribs river right')
+%ylim([-.1, .1])
+
+xx=(a_tribtoms(a_tribtoms<0));
+yy=ksn_tribbot(a_tribtoms<0 );
+negtrib=fit(xx(~isnan(yy)), yy(~isnan(yy)),  'poly1')
+nexttile
+plot((a_tribtoms(a_tribtoms<0)), ksn_tribbot(a_tribtoms<0 ), 'o', 'MarkerEdgeColor', [.5, .5, .5])
+hold on
+%plot(negtbinang,negtbinc,  'ks', 'MarkerFaceColor', 'r' )
+plot(negtrib)
+ylabel('curvature')
+xlabel('Trib angle')
+title('negative tribs river left')
+%ylim([-.1, .1])
 %%
 figure
-plot(curve_ms(a_tribtoms<0), ksn_tribbot(a_tribtoms>0), 'o')
+plot(dist_tribbot, ksn_tribbot, 'o')
+xlabel('Dist upstream')
+ylabel('ksn of trib bottom')
+
+figure
+plot(dist_tribbot, ksn_tribbot, 'o')
+
+%%
+
+figure
+%imageschs(sDEM)
+%hold on
+%plot(smoothx, smoothy, 'k')
+plotc(sS, sk) %curv, sk
+hold on
+plotc(strunky, curv) %curv, sk
+
+%scatter(snapx_trib, snapy_trib, 60, a_tribtoms, 'filled')
+%scatter(snapx_trib, snapy_trib, 50, curve_ms, 'filled')
+%scatter(snapx_trib, snapy_trib, 60, a_tribtoms, 'filled')
+
+caxis([-.1, .1])
+colormap(ttscm('vik'))
+h = colorbar;
+h.Label.String = 'Angle (degrees)';
+
+%%
+figure
+imageschs(sDEM)
+%hold on
+%plot(smoothx, smoothy, 'k')
+
+plotc(sS, curv) %curv, sk
+hold on
+caxis([0, 50])
+colormap(jet)
+h = colorbar;
+h.Label.String = 'Angle (degrees)';
+%plotc(strunky, tcurv) %curv, sk
+% hold on
+caxis([-.03, .03])
+colormap(ttscm('vik'))
+h = colorbar;
+h.Label.String = 'Angle (degrees)';
