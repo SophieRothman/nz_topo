@@ -18,14 +18,13 @@ c = chitransform(Strunk,A,'mn',0.55);
 figure
 imageschs(DEM,[],'colormap',[1 1 1],'colorbar',false,'ticklabel','nice');
 hold on
-figure
 plotc(Strunk,c)
 colormap(jet)
 colorbar
 hold off
 
 %%
-k = ksn(Strunk,DEM,A,.45, 100);
+k = ksn(Strunk,DEM,A,.45, 20);
 figure
 histogram(k)
 %%
@@ -35,8 +34,17 @@ hold on
 plotc(Strunk,k)
 colormap(jet)
 colorbar
-caxis([0, 100])
+caxis([0, 125])
 hold off
+
+%DEMc = imposemin(Strunk,DEM)
+%k = ksn(S,DEMc,A,.45, 200);
+%g=gradient(Strunk, DEMc );
+figure
+plotdz(Strunk, DEM, 'color', k, 'colormethod'  , 'surface')
+colormap(jet)
+colorbar
+caxis([0, 85])
 %% CURVATURE
 
 
@@ -138,7 +146,7 @@ for i =2:ntribs_tot
     yout=long(inan_tot(i)-1);
     [snapx, snapy]=snap2stream(strunky, xout, yout);
     dist2str=sqrt(((snapx-xout).^2)+((snapy-yout).^2));
-    if dist2str<3
+    if dist2str<2
         count=count+1;
         inan(count, 1)=inan_tot(i);
         snapx_trib(count, 1)=snapx;
@@ -146,20 +154,44 @@ for i =2:ntribs_tot
         
     end
 end
+find_tribbot=find(ismember(inan_tot, inan))-1;
+inan_top=inan_tot(find_tribbot);
 %% get the index in the main stream (strunky) of each junction
 i_ms=NaN(length(inan), 1);
+% for i=1:length(inan)
+%     ix=find(abs(tlat-lat(inan(i)-1))<5 & abs(tlong-long(inan(i)-1))<5);
+%     if length(ix)>1
+%        distix= sqrt((tlat(ix)-lat(inan(i)-1)).^2+(tlong(ix)-long(inan(i)-1)).^2);
+%        mindistix=find(distix==min(distix));
+%        ix=ix(mindistix);
+%     end
+%     if length(ix)==1
+%         i_ms(i)=ix;
+%     end
+% 
+% end
+
+i_ms=NaN(length(inan), 1);
+elev_threshold=2;
 for i=1:length(inan)
-    ix=find(abs(tlat-lat(inan(i)-1))<5 & abs(tlong-long(inan(i)-1))<5);
-    if length(ix)>1
-       distix= sqrt((tlat(ix)-lat(inan(i)-1)).^2+(tlong(ix)-long(inan(i)-1)).^2);
-       mindistix=find(distix==min(distix));
-       ix=ix(mindistix);
-    end
-    if length(ix)==1
-        i_ms(i)=ix;
+    itribtot=(inan_top(i)+1):(inan(i)-1);
+    elev_tribtot=elev(itribtot);
+    itribtot=itribtot(elev_tribtot>elev_tribtot(end)+elev_threshold); %eliminating the part of the trib that is less than 0.5 m above the outlet to get rid fo the influence of the floodplain
+    if length(itribtot)>5
+        [snapx, snapy]=snap2stream(strunky, lat(itribtot(end)), long(itribtot(end)));
+        ix=find(abs(tlat-snapx)<=2 & abs(tlong-snapy)<=2);
+        if length(ix)>1
+           distix= sqrt((tlat(ix)-snapx).^2+(tlong(ix)-snapy).^2);
+           mindistix=find(distix==min(distix));
+           ix=ix(mindistix);
+        end
+        if length(ix)==1
+            i_ms(i)=ix;
+        end
     end
 
 end
+
 
 %% try to get the junction angle of each trib
 %first get the angle of both the trib and the mainstem for each junction
@@ -169,15 +201,19 @@ ypos_trib=NaN(length(inan), 1);
 ypos_ms=NaN(length(inan), 1);
 xpos_trib=NaN(length(inan), 1);
 xpos_ms=NaN(length(inan), 1);
-
 for i=1:length(inan)
-    if ~isnan(i_ms(i))
+    itribtot=(inan_top(i)+1):(inan(i)-1);
+    elev_tribtot=elev(itribtot);
+    itribtot=itribtot(elev_tribtot>elev_tribtot(end)+elev_threshold); %eliminating the part of the trib that is less than 0.5 m above the outlet to get rid fo the influence of the floodplain
+
+    if ~isnan(i_ms(i)) & length(itribtot)>5
         %for the trib first whats the angle
-        if sum(isnan(smoothx((inan(i)-1):-1:(inan(i)-11))))==0
-            poly1fit=polyfit(smoothx((inan(i)-1):-1:(inan(i)-11), 1), smoothy((inan(i)-1):-1:(inan(i)-11)), 1);
+
+        if length(itribtot)>30%sum(isnan(smoothx((inan(i)-1):-1:(inan(i)-11))))==0
+            poly1fit=polyfit(smoothx(itribtot), smoothy(itribtot), 1);%polyfit(lat(itribtot(end-30):itribtot(end)), long(itribtot(end-30):itribtot(end)), 1);%(smoothx((inan(i)-1):-1:(inan(i)-11), 1), smoothy((inan(i)-1):-1:(inan(i)-11)), 1);
         end
-        if sum(isnan(smoothx((inan(i)-1):-1:(inan(i)-11))))~=0  % do a less robust polyfit for those very short tribs
-            poly1fit=polyfit(smoothx((inan(i)-1):-1:(inan(i)-3)), smoothy((inan(i)-1):-1:(inan(i)-3)), 1);
+        if length(itribtot)>5 & length(itribtot)<11 %sum(isnan(lat(itribtot(end-11):itribtot(end))))~=0  % do a less robust polyfit for those very short tribs
+            poly1fit=polyfit(smoothx(itribtot), smoothy(itribtot), 1);%polyfit(lat(itribtot(end-4):itribtot(end)), long(itribtot(end-4):itribtot(end)), 1);%polyfit(smoothx((inan(i)-1):-1:(inan(i)-3)), smoothy((inan(i)-1):-1:(inan(i)-3)), 1);
         end
         angle=atan(poly1fit(1));
         a_trib(i)=rad2deg(angle);
@@ -206,22 +242,22 @@ for i=1:length(inan)
         end
 
         %for the ms first whats the angle
-        if i~=1 & i~=518
-            poly1fit2=polyfit(tsmoothx((i_ms(i)+5):-1:(i_ms(i)-5)), tsmoothy((i_ms(i)+5):-1:(i_ms(i)-5)), 1);
+        if i~=1  & i~=516
+            poly1fit2=polyfit(tsmoothx((i_ms(i))+5:-1:(i_ms(i)-5)), tsmoothy((i_ms(i))+5:-1:(i_ms(i)-5)), 1);
         end
-        if i==1 | i==518
-            poly1fit2=polyfit(tsmoothx((i_ms(i)):-1:(i_ms(i)-5)), tsmoothy((i_ms(i)):-1:(i_ms(i)-5)), 1);
+        if i==1 | i==516
+            poly1fit2=polyfit(tsmoothx((i_ms(i))+1:-1:(i_ms(i)-4)), tsmoothy((i_ms(i))+1:-1:(i_ms(i)-4)), 1);
         end
         angle2=atan(poly1fit2(1));
         a_ms(i)=rad2deg(angle2);
         
         %is it moving in a y pos or neg direction
-        if i~=1 & i~=518
+        if i~=1 & i~=516
             msdify=tsmoothy(i_ms(i)+5)-tsmoothy(i_ms(i)-5);
             msdifx=tsmoothx(i_ms(i)+5)-tsmoothx(i_ms(i)-5);
         end
         
-        if i==1 | i==518
+        if i==1 | i==516
             msdify=tsmoothy(i_ms(i))-tsmoothy(i_ms(i)-5);
             msdifx=tsmoothx(i_ms(i))-tsmoothx(i_ms(i)-5);        
 
@@ -275,21 +311,59 @@ da_trib=NaN(length(inan), 1);
 curve_ms=NaN(length(inan), 1);
 dist_tribbot=NaN(length(inan), 1);
 %there's also a_tribtoms
-
+xbot=NaN(length(inan), 1);
+ybot=NaN(length(inan), 1);
+elev_threshold=2;
 for i=1:length(inan)
-    if ~isnan(i_ms(i)) & i~=518
-        ksn_tribbot(i)=mean(ks(inan(i)-30:inan(i)-2));
-        if isnan(mean(ks(inan(i)-30 : inan(i)-2)))
-            ksn_tribbot(i)=mean(ks(inan(i)-15 : inan(i)-2));
+    if ~isnan(i_ms(i)) & i~=516
+        itribtot=(inan_top(i)+1):(inan(i)-1);
+        elev_tribtot=elev(itribtot);
+        itribtot=itribtot(elev_tribtot>elev_tribtot(end)+elev_threshold); %eliminating the part of the trib that is less than 0.5 m above the outlet to get rid fo the influence of the floodplain
+        if ~isempty(itribtot)
+            xbot(i)=long(itribtot(end));
+            ybot(i)=lat(itribtot(end));
+            if length(itribtot)>16
+                ksn_tribbot(i)=mean(ks(itribtot(end)-16:itribtot(end)));%mean(ks(itribtot));%mean(ks(itribtot(end)-30:itribtot(end)));%
+            end
+            if length(itribtot)<17
+                ksn_tribbot(i)=mean(ks(itribtot));
+            end
+
+    %         ksn_tribbot(i)=mean(ks(inan(i)-30:inan(i)-2)); %uncomment if new method fails
+    %         if isnan(mean(ks(inan(i)-30 : inan(i)-2))) %uncomment if new method fails
+    %             ksn_tribbot(i)=mean(ks(inan(i)-15 : inan(i)-2));%uncomment if new method fails
+    %         end %uncomment if new method fails
+    %         if isnan(mean(ks(inan(i)-15 : inan(i)-2)))
+    %             ksn_tribbot(i)=mean(ks(inan(i)-5 : inan(i)-2));
+    %         end
+            da_trib(i)=area(itribtot(end));
+            curve_ms(i)=mean(tcv((i_ms(i)-1):(i_ms(i)+1)));
+            dist_tribbot(i)=tdist(i_ms(i)-1);
         end
-        if isnan(mean(ks(inan(i)-15 : inan(i)-2)))
-            ksn_tribbot(i)=mean(ks(inan(i)-5 : inan(i)-2));
-        end
-        da_trib(i)=area(inan(i)-1);
-        curve_ms(i)=tcv(i_ms(i)-2);%mean(tcv((i_ms(i)-2):(i_ms(i)+2)));
-        dist_tribbot(i)=tdist(i_ms(i)-1);
     end
 end
+%%
+figure
+
+
+imageschs(sDEM)
+%hold on
+%plot(smoothx, smoothy, 'k')
+
+plotc(sS,sk) %curv, sk
+hold on
+
+scatter(ybot, xbot, 60, 'filled')
+caxis([0, 80])
+%colormap(jet)
+%h = colorbar;
+%h.Label.String = 'Angle (degrees)';
+%plotc(strunky, tcurv) %curv, sk
+% hold on
+% caxis([-.03, .03])
+ colormap(ttscm('vik'))
+ h = colorbar;
+% h.Label.String = 'Angle (degrees)';
 %tomorrow must check if this actually separates tribs
 %% binning by curv value
 xxp=curve_ms(a_tribtoms>0 );
@@ -299,7 +373,7 @@ yyn=ksn_tribbot(a_tribtoms<0);
 binnum=15;
 curvbin=linspace(-.08, .08, binnum+1);
 %curvebin=[-.15, -.04, -.025, -.015,-.005, 0, .005, .015, .025, .04, .15 ];
-curvbin=[ -0.0800    -0.0480   -0.035   -0.022   -0.0160   -0.0053    0.0053    0.0160    0.0267    0.0373    0.0480       0.0800];
+curvbin=[ -0.0800    -0.0480   -0.035   -0.022   -0.01   -0.004  0  0.004    0.01    0.022   0.035    0.0480       0.0800];
 binnum=length(curvbin)-1;
 negtbink=NaN(binnum, 1);
 postbink=NaN(binnum, 1);
@@ -318,19 +392,24 @@ negtbinang=NaN(binnum, 1);
 postbinang=NaN(binnum, 1);
 
 for i=1:binnum
+    
     binn=(xxn>curvbin(i) & xxn<curvbin(i+1));
     binp=(xxp>curvbin(i) & xxp<curvbin(i+1));
-
-    negtbink(i)=mean(yyn(binn), 'omitnan');
-    negtbinc(i)=mean(xxn(binn), 'omitnan');
+    if sum(binn)>6 %dont want to bin stuff with less than 5
+        negtbink(i)=mean(yyn(binn), 'omitnan');
+        negtbinc(i)=mean(xxn(binn), 'omitnan');        
+        negtbinda(i)=mean(dan(binn), 'omitnan');        
+        negtbinang(i)=mean((angn(binn)), 'omitnan');
+    end
     
-    postbink(i)=mean(yyp(binp), 'omitnan');
-    postbinc(i)=mean(xxp(binp), 'omitnan');
+    if sum(binp)>6
+        postbink(i)=mean(yyp(binp), 'omitnan');
+        postbinc(i)=mean(xxp(binp), 'omitnan');        
+        postbinda(i)=mean(dap(binp), 'omitnan');
+        postbinang(i)=mean((angp(binp)), 'omitnan');
+        
+    end
 
-    negtbinda(i)=mean(dan(binn), 'omitnan');
-    postbinda(i)=mean(dap(binp), 'omitnan');
-    negtbinang(i)=mean(abs(angn(binn)), 'omitnan');
-    postbinang(i)=mean(abs(angp(binp)), 'omitnan');
 end
 
 
@@ -340,14 +419,15 @@ plot(curve_ms(a_tribtoms>0 & dist_tribbot<1.7e4), ksn_tribbot(a_tribtoms>0& dist
 
 xx=curve_ms(a_tribtoms>0 );
 yy=ksn_tribbot(a_tribtoms>0);
-postrib=fit(postbinc(~isnan(postbink)), postbink(~isnan(postbink)), 'poly1')
+postrib=fitlm(postbinc(~isnan(postbink)), postbink(~isnan(postbink)), 'poly1')
 figure
 tiledlayout(2, 1)
 nexttile
 plot(curve_ms(a_tribtoms>0 ), ksn_tribbot(a_tribtoms>0), 'o', 'MarkerEdgeColor', [.5, .5, .5])
 hold on
-plot(postbinc, postbink, 'ks', 'MarkerFaceColor', 'r' )
 plot(postrib)
+plot(postbinc, postbink, 'ks', 'MarkerFaceColor', 'r' )
+
 xlabel('curvature')
 ylabel('ksn')
 title('positive tribs river right')
@@ -355,12 +435,13 @@ xlim([-.1, .1])
 
 xx2=curve_ms(a_tribtoms<0 );
 yy2=ksn_tribbot(a_tribtoms<0);
-negtrib=fit(negtbinc(~isnan(negtbink)), negtbink(~isnan(negtbink)), 'poly1')
+negtrib=fitlm(negtbinc(~isnan(negtbink)), negtbink(~isnan(negtbink)), 'poly1')
 nexttile
 plot(curve_ms(a_tribtoms<0 ), ksn_tribbot(a_tribtoms<0), 'o', 'MarkerEdgeColor', [.5, .5, .5])
 hold on
-plot(negtbinc, negtbink, 'ks', 'MarkerFaceColor', 'r' )
 plot(negtrib)
+
+plot(negtbinc, negtbink, 'ks', 'MarkerFaceColor', 'r' )
 xlabel('curvature')
 ylabel('ksn')
 title('negative tribs river left')
@@ -368,31 +449,35 @@ xlim([-.1, .1])
 %% same plot but da
 xx=curve_ms(a_tribtoms>0 );
 yy=ksn_tribbot(a_tribtoms>0);
-postrib=fit(postbinc(~isnan(postbinc)), postbinda(~isnan(postbinc)), 'poly1')
+postrib=fitlm(postbinc(~isnan(postbinc)), postbinda(~isnan(postbinc)), 'poly1')
 figure
 tiledlayout(2, 1)
 nexttile
 plot(curve_ms(a_tribtoms>0 ), da_trib(a_tribtoms>0), 'o', 'MarkerEdgeColor', [.5, .5, .5])
 hold on
-plot(postbinc, postbinda, 'ks', 'MarkerFaceColor', 'r' )
 plot(postrib)
+
+plot(postbinc, postbinda, 'ks', 'MarkerFaceColor', 'r' )
 xlabel('curvature')
 ylabel('DA')
 title('positive tribs river right')
 xlim([-.1, .1])
+ylim([0, 1e5])
 
 %xx2=curve_ms(a_tribtoms<0 );
 %yy2=ksn_tribbot(a_tribtoms<0);
-negtrib=fit(negtbinc(~isnan(negtbinc)), negtbinda(~isnan(negtbinc)), 'poly1')
+negtrib=fitlm(negtbinc(~isnan(negtbinc)), negtbinda(~isnan(negtbinc)), 'poly1')
 nexttile
 plot(curve_ms(a_tribtoms<0 ), da_trib(a_tribtoms<0), 'o', 'MarkerEdgeColor', [.5, .5, .5])
 hold on
-plot(negtbinc, negtbinda, 'ks', 'MarkerFaceColor', 'r' )
 plot(negtrib)
+plot(negtbinc, negtbinda, 'ks', 'MarkerFaceColor', 'r' )
+
 xlabel('curvature')
 ylabel('DA')
 title('negative tribs river left')
 xlim([-.1, .1])
+ylim([0, 1e5])
 %% same plot but trib angle
 absang=abs(a_tribtoms);
 absang(absang>90)=absang(absang>90)-90;
@@ -436,7 +521,7 @@ plot((a_tribtoms(a_tribtoms>0)), ksn_tribbot(a_tribtoms>0 ), 'o', 'MarkerEdgeCol
 hold on
 %plot(postbinang, postbinc, 'ks', 'MarkerFaceColor', 'r' )
 plot(postrib)
-ylabel('curvature')
+ylabel('ksn')
 xlabel('Trib angle')
 title('positive tribs river right')
 %ylim([-.1, .1])
@@ -449,13 +534,16 @@ plot((a_tribtoms(a_tribtoms<0)), ksn_tribbot(a_tribtoms<0 ), 'o', 'MarkerEdgeCol
 hold on
 %plot(negtbinang,negtbinc,  'ks', 'MarkerFaceColor', 'r' )
 plot(negtrib)
-ylabel('curvature')
+ylabel('ksn')
 xlabel('Trib angle')
 title('negative tribs river left')
 %ylim([-.1, .1])
 %%
 figure
-plot(dist_tribbot, ksn_tribbot, 'o')
+plot(dist_tribbot(a_tribtoms<0), ksn_tribbot(a_tribtoms<0), 'ro')
+hold on
+plot(dist_tribbot(a_tribtoms>0), ksn_tribbot(a_tribtoms>0), 'ko')
+
 xlabel('Dist upstream')
 ylabel('ksn of trib bottom')
 
@@ -483,19 +571,41 @@ h.Label.String = 'Angle (degrees)';
 
 %%
 figure
+
+
 imageschs(sDEM)
 %hold on
 %plot(smoothx, smoothy, 'k')
 
-plotc(sS, curv) %curv, sk
+plotc(sS,sk) %curv, sk
 hold on
-caxis([0, 50])
+
+scatter(ybot, xbot, 60, 'filled')
+caxis([0, 80])
+%colormap(jet)
+%h = colorbar;
+%h.Label.String = 'Angle (degrees)';
+%plotc(strunky, tcurv) %curv, sk
+% hold on
+% caxis([-.03, .03])
+ colormap(ttscm('vik'))
+ h = colorbar;
+% h.Label.String = 'Angle (degrees)';
+
+
+c = chitransform(sS,sA,'mn',0.45);
+figure
+imageschs(sDEM)
+%hold on
+%plot(smoothx, smoothy, 'k')
+plotc(sS,c) %curv, sk
+hold on
+caxis([0, 12000])
 colormap(jet)
 h = colorbar;
 h.Label.String = 'Angle (degrees)';
 %plotc(strunky, tcurv) %curv, sk
 % hold on
-caxis([-.03, .03])
-colormap(ttscm('vik'))
-h = colorbar;
-h.Label.String = 'Angle (degrees)';
+% caxis([-.03, .03])
+ %colormap(ttscm('vik'))
+ %h = colorbar;
